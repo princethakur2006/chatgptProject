@@ -1,74 +1,197 @@
-export const login = async(req, res)=>{
+import jwt from "jsonwebtoken";
+import User from "../model/userSchema.js"
+import bcrypt from "bcrypt"
+
+const createToken = ()=>{
+
+    if(!process.env.JWT_SECRET){
+        throw new Error("jwt secret key is missing");
+    }
+
+
+    const token = jwt.sign({id,email}, process.env.JWT_SECRET, {expiresIn:"1h"});
+    return token ; 
+}
+
+const cookiesOption = {
+    httpOnly: true, // js code will never able to read that cookie
+    secure:false,   
+    maxAge:60*601000 /// store max for 1 hour
+}
+
+
+export const signup = async(req, res)=>{
+   try {
+    const {name, age, email, password}= req.body;
+    if(!email || !password || !name){
+        return res.status(400).json({
+            message:"something is missing"
+        })
+    }
+
+    const user =  await user.findOne({email});
+
+    if(user){
+        return res.status(409).json({
+            message:"email is already exist"
+        })
+    }
+
+    const hashPass = await bcrypt.hash(password, 12);
+
+    const userCreated = User.create({
+        name,
+        age, // if not given then i
+        email,
+        password:hashPass
+    })
+
+    // token create 
+
+    const token = createToken(userCreated._id, email);
+
+    res.cookies("token", token, cookiesOption);
+
+    res.status(201).json({
+        message:"user created successfully",
+        name,
+        age,
+        email
+    })
+
+
+
+
+
+    // https status code 
+   } catch (error) {
+    console.log(error);
+    res.status(500).json({
+        message:"internal server error"
+    })
+   }
+}
+
+export const login = async(req, res)=>{ 
+    try {
+        const {email, password} = req.body;
+
+        if(!email||!password){
+            return res.status(409).json({
+            message:"email and pass are missing"
+        })
+        }
+
+        // verify the password
+        const existingUser = await User.findOne({email});
+        if(!existingUser){
+            return res.status(401).json({
+                message:"invalid credentials"
+            })
+        }
+
+        //match the pass 
+        const isMatch = await bcrypt.compare(password, existingUser.password);
+
+        if(!isMatch){
+            return res.status(401).json({
+                message:"invalid credentials"
+            })
+        }
+
+        const token = createToken(existingUser._id, email);
+
+        res.cookie("token", token, cookiesOption);
+
+        res.status(200).json({
+            message:"user created successfully",
+            name:existingUser.name,
+            age:existingUser.age,
+            email:existingUser.email,
+            usage:existingUser.usage
+        })
+
+
+    } catch (error) {
+        console.log(err),
+        res.status(500).json({
+            message:"internal sevrer error "
+        });
+        
+    }
     
 
 }
 
 export const logout = async(req, res)=>{
-    
-}
+    //logout 
 
-export const signup = async(req, res)=>{
-    const {name, age , email , password} = req.body;
-
-    const hashPassword = await bcrypt.hash(password, 12);
-
-    const u = await User.create({
-        name, age, email, password:hashPassword
+    res.clearCookie("token", {
+        httpOnly: true, // js code will never able to read that cookie
+        secure:false,
     })
 
-
-    // token bhejna padega 
-
-    //payload(no sensitive data here), secret key , optional field
-    
-
-    // token creation
-    const token = jwt.sign({
-        email:email,
-        name:name
-    },
-    "rohit@456" , //=> seceret key
-    {expiresIn:"1h"}
-    )
-    
-    //browser se baat
-    res.cookie("token",token, {
-        httpOnly:true,  //tells browser dont give access to frontend document.cookie
-        secure:false,   // if true then browser got the indication if the website then it means website will be on https 
-        maxAge:60*60*1000 // milisecod  indication to browser
-
-    })
-
-    //expires in tell when the token is created and when will it will be expired
-    res.json({
-        message:"user profile is created"
+    res.status(200).json({
+        message:"user logged out successfully "
     })
 }
 
-export const profile = async(req, res)=>{
-    
-    //verify its token 
+// profile ko sirf mein dekhu or koi nahi
+// authentciated user:(wo srf apni hi profile ko access kar sakta hai): token hai laadle
+// export const profile = async (req,res)=>{
+//     try{
+        
+//         const {email} = req.body;
 
-    const {token} = req.cookies;
+//         if(!email){
+//             return res.status(400).json({
+//                 message: "Email is missing"
+//             })
+//         }
 
-    // verify this token its valid or not 
+//         const existingUser = await User.findOne({email});
 
-    const payload = jwt.verify(token, "rohit@456"); //return the payload 
+//         if(!existingUser){
+//             return res.status(401).json({message:"Invalide Email"})
+//         }
 
-    const user = await User.findOne({email: payload.email})
+//         res.status(200).json({
+//             name:existingUser.name,
+//             age: existingUser.age,
+//             usage: existingUser.usage,
+//             email: existingUser.email
+//         })
+//     }
+//     catch(err){
+        
+//         console.log(err);
+//         res.status(500).json({
+//             message: "Internal Server error"
+//         })
 
-    if(user){
-        res.json({
-        message:"your user detail",
-        data: user
+//     }
+// }
+
+export const profie = async(req,res)=>{
+    try{
+        // profile ki informat send karo
+        // Database ke andar call kari padegi, us user ko search, _id, email
+        res.status(200).json({
+            name:req.user.name,
+            age: req.user.age,
+            usage: req.user.usage,
+            email: req.user.email
         })
-    }else{
-        res.json({
-            message:"user is not found"
+
+    }
+    catch(err){
+
+        console.log(err);
+        res.status(500).json({
+            message: "Internal Server error"
         })
     }
-
-}
+}   
 
 
 
