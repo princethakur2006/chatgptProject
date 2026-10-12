@@ -1,6 +1,7 @@
 import jwt from "jsonwebtoken";
 import User from "../model/userSchema.js"
 import bcrypt from "bcrypt"
+import { signupSchema, loginSchema } from "../validators/userValidator.js";
 
 const createToken = ()=>{
 
@@ -22,13 +23,22 @@ const cookiesOption = {
 
 export const signup = async(req, res)=>{
    try {
-    const {name, age, email, password}= req.body;
-    if(!email || !password || !name){
+
+    // validate the data
+
+    const result = signupSchema.safeparse(req.body);
+
+    if(!result.success){
         return res.status(400).json({
-            message:"something is missing"
+            message:result.error.issues[0].message
         })
     }
 
+    
+
+
+    const {name, age, email, password}= result.data;
+    
     const user =  await user.findOne({email});
 
     if(user){
@@ -74,13 +84,21 @@ export const signup = async(req, res)=>{
 
 export const login = async(req, res)=>{ 
     try {
-        const {email, password} = req.body;
+        const result = loginSchema.safeparse(req.body);
 
-        if(!email||!password){
-            return res.status(409).json({
-            message:"email and pass are missing"
-        })
+        
+        if(!result.success){
+        return res.status(400).json({
+            message:result.error.issues[0].message
+            })
         }
+
+
+
+        const {email, password} = req.result;
+
+       
+        
 
         // verify the password
         const existingUser = await User.findOne({email});
