@@ -19,8 +19,14 @@ app.use(express.json());
 app.use(cookieParser());
 
 
+app.use((req, res, next) => {
+    console.log("Incoming request:", req.method, req.originalUrl);
+    next();
+});
+
+
 app.use("/user", userRouter);
-app.use("message", messageRouter)
+app.use("/message", messageRouter)
 app.use("/chat", chatRouter)
 //login, signup, logout , profile:user related
 
@@ -37,7 +43,7 @@ const startServer = async ()=>{
         console.log(`server has started listeneig on port ${process.env.PORT} `);
         })
     } catch (error) {
-        console.log(err);
+        console.log(error);
         
     }
 }

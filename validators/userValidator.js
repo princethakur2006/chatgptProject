@@ -1,4 +1,4 @@
-import {z} from zod;
+import {z} from "zod";
 
 // name, age, email, password
 export const signupSchema = z.object({

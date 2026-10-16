@@ -3,7 +3,14 @@ import User from "../model/userSchema.js"
 
 const authUserMiddleware = async(req, res , next)=>{
     try {
+        
         const {token} = req.cookies;
+
+        if(!token){
+            return res.status(401).json({
+                message:"unauthorized access or you need to login first",
+            })
+        }
         const payload =  jwt.verify(token, process.env.JWT_SECRET);
 
         const existingUser = await User.findById(payload.id);
@@ -18,6 +25,7 @@ const authUserMiddleware = async(req, res , next)=>{
         req.user = existingUser;
         next(); 
 
+              
 
 
     } catch (error) {

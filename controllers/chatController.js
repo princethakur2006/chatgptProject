@@ -1,6 +1,6 @@
 // get recent top 20 chat, geTSingleChat, CreateChat, deleteCHat\
 import Chat from "../model/chatSchema.js"
-
+import Message from "../model/messageSchema.js"
 //req.user = user information in it  // last 20 chats 
 
 
@@ -56,7 +56,7 @@ export const getSingleChat = async(req, res)=>{
 export const createChat = async(req, res)=>{
     try {
         const {model} = req.body;
-
+        //openRouterFree
         if(!model){
             return res.status(400).json({
                 message:"model name is missing"
@@ -115,7 +115,7 @@ export const deleteChat = async(req, res)=>{
             message:"your chat has been deleted successfully"
         })
     } catch (error) {
-        console.log(err);
+        console.log(error);
         res.status(500).json({
             message:"internal server error"
         })

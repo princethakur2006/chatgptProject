@@ -2,8 +2,10 @@ import jwt from "jsonwebtoken";
 import User from "../model/userSchema.js"
 import bcrypt from "bcrypt"
 import { signupSchema, loginSchema } from "../validators/userValidator.js";
+import Chat from "../model/chatSchema.js";
+import Message from "../model/messageSchema.js";
 
-const createToken = ()=>{
+const createToken = (id, email)=>{
 
     if(!process.env.JWT_SECRET){
         throw new Error("jwt secret key is missing");
@@ -26,7 +28,7 @@ export const signup = async(req, res)=>{
 
     // validate the data
 
-    const result = signupSchema.safeparse(req.body);
+    const result = signupSchema.safeParse(req.body);
 
     if(!result.success){
         return res.status(400).json({
@@ -39,7 +41,7 @@ export const signup = async(req, res)=>{
 
     const {name, age, email, password}= result.data;
     
-    const user =  await user.findOne({email});
+    const user =  await User.findOne({email});
 
     if(user){
         return res.status(409).json({
@@ -49,7 +51,7 @@ export const signup = async(req, res)=>{
 
     const hashPass = await bcrypt.hash(password, 12);
 
-    const userCreated = User.create({
+    const userCreated = await User.create({
         name,
         age, // if not given then i
         email,
@@ -60,7 +62,7 @@ export const signup = async(req, res)=>{
 
     const token = createToken(userCreated._id, email);
 
-    res.cookies("token", token, cookiesOption);
+    res.cookie("token", token, cookiesOption);
 
     res.status(201).json({
         message:"user created successfully",
@@ -84,7 +86,7 @@ export const signup = async(req, res)=>{
 
 export const login = async(req, res)=>{ 
     try {
-        const result = loginSchema.safeparse(req.body);
+        const result = loginSchema.safeParse(req.body);
 
         
         if(!result.success){
@@ -95,7 +97,7 @@ export const login = async(req, res)=>{
 
 
 
-        const {email, password} = req.result;
+        const {email, password} = result.data;
 
        
         
@@ -122,7 +124,7 @@ export const login = async(req, res)=>{
         res.cookie("token", token, cookiesOption);
 
         res.status(200).json({
-            message:"user created successfully",
+            message:"user logged in successfully",
             name:existingUser.name,
             age:existingUser.age,
             email:existingUser.email,
@@ -131,7 +133,7 @@ export const login = async(req, res)=>{
 
 
     } catch (error) {
-        console.log(err),
+        console.log(error),
         res.status(500).json({
             message:"internal sevrer error "
         });
@@ -190,7 +192,7 @@ export const logout = async(req, res)=>{
 //     }
 // }
 
-export const profie = async(req,res)=>{
+export const profile = async(req,res)=>{
     try{
         // profile ki informat send karo
         // Database ke andar call kari padegi, us user ko search, _id, email
@@ -211,6 +213,51 @@ export const profie = async(req,res)=>{
     }
 }   
 
+export const deleteUser = async(req,res)=>{
+    try{
+        // find all the chat id belongs to user
+
+        // delete all the messages which belongs to the chat id => messages del using chat id
+
+        // del all the chatId which belongs to this user=> del chatId using this user
+
+        // del userProfile ; by his id 
+
+        const userId = req.user._id;
+
+        const chats = await Chat.find({ userId }).select("_id");
+        
+        const chatIds = chats.map((chat) => chat._id);
+        
+        await Message.deleteMany({
+          chatId: { $in: chatIds }
+        });
+        
+        await Chat.deleteMany({
+          userId
+        });
+        
+        await User.deleteOne({
+          _id: userId
+        });
+        
+        res.clearCookie("token", {
+          httpOnly: true,
+          secure: false,
+          
+        });
+        
+        res.status(200).json({
+          message: "Account deleted successfully"
+        });
+        
+    }catch(err){
+        res.status(500).json({
+        message: "Internal server error"
+
+        })
+
+}}
 
 
 
