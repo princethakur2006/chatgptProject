@@ -3,6 +3,19 @@
 import Chat from "../model/chatSchema.js";
 import Message from "../model/messageSchema.js"
 import mongoose from "mongoose";
+import {generateAIResponse} from "../service/openRouterService.js";
+import {buildMessagesForAI} from "../utils/chatContext.js";
+import {updateSummaryIfNeeded} from "../service/summaryService.js";
+import {
+  resetUsageIfNeeded,
+  hasTokenLimitReached,
+  addUserTokenUsage,
+} from "../utils/userUsage.js";
+
+import { addChatTokenUsage } from "../utils/tokenUsage.js";
+
+
+
 
 export const getMessage = async (req, res)=>{
     try {
@@ -51,6 +64,13 @@ export  const sendMessage = async (req, res) => {
       });
     }
 
+    if (hasTokenLimitReached(req.user)) {
+      return res.status(429).json({
+        message: "Token limit reached. Please try after some time.",
+        usage: req.user.usage,
+      });
+    } 
+
     let chat;
 
     // 2. Existing chat case
@@ -61,6 +81,8 @@ export  const sendMessage = async (req, res) => {
           message: "Invalid chat id"
         });
       }
+
+      await resetUsageIfNeeded(req.user);
 
       chat = await Chat.findOne({
         _id: chatId,
@@ -89,7 +111,27 @@ export  const sendMessage = async (req, res) => {
       });
     }
 
-    // 4. Save user message
+    //our code starts here
+
+    //old messages are that whose summary has been not created till now 
+
+    const oldMessages = await Message.find({
+      chatId: chat._id,
+    })
+      .sort({ createdAt: 1 })
+      .skip(chat.summarizedTillMessageNumber);
+
+    const messagesForAI = buildMessagesForAI({
+      chat,
+      oldMessages,
+      currentMessage: content.trim(),
+    });
+
+    const { aiReply, usage } = await generateAIResponse({
+      model: chat.model,
+      messages: messagesForAI,
+    });
+
     const userMessage = await Message.create({
       chatId: chat._id,
       role: "user",
@@ -97,35 +139,38 @@ export  const sendMessage = async (req, res) => {
       userId: req.user._id
     });
 
-    // 5. Dummy AI reply for now
-    // Later we will replace this with OpenRouter response
-    const aiReply = "AI reply will come here later.";
-
-    // 6. Save assistant message
     const assistantMessage = await Message.create({
       chatId: chat._id,
       role: "assistant",
       content: aiReply,
-      userId: req.user._id
+       userId: req.user._id,
+       usage,
     });
 
-    // 7. Update chat metadata
     chat.messageCount += 2;
 
-    // If topic is still default, update it from first message
     if (chat.topic === "New Chat") {
       chat.topic = content.trim().slice(0, 40);
     }
 
-    await chat.save();
+    await addChatTokenUsage(chat, usage);
+    await addUserTokenUsage(req.user, usage.totalTokens);
 
-    // 8. Send response
     res.status(201).json({
       message: "Message sent successfully",
       chatId: chat._id,
+      reply: aiReply,
+      usage,
       userMessage,
-      assistantMessage
+      assistantMessage,
     });
+
+    
+
+    //KAFKA INTRODUCTION==> 
+
+    updateSummaryIfNeeded()  //=> implemented by kafka
+    //kafka introduction
 
   } catch (err) {
     console.log(err);
